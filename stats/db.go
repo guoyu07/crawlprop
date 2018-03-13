@@ -1,20 +1,23 @@
 package stats
 
+//DecoyStats ...
 type DecoyStats struct {
-	goodput, badput int
-	leafs, nonleafs int
-	pages_total     int
-	final_depths    []int
+	Goodput, Badput int
+	Leafs, Nonleafs int
+	PagesTotal      int
+	FinalDepths     []int
 }
 
+//PageStats ...
 type PageStats struct {
-	hostname string
-	depth    int
-	final    bool
+	Hostname string
+	Depth    int
+	Final    bool
 }
 
+//ResourceStats ...
 type ResourceStats struct {
-	hostname  string
-	isGoodput bool
-	size      int
+	Hostname  string
+	IsGoodput bool
+	Size      int
 }
