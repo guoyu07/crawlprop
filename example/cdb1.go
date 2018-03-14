@@ -7,7 +7,7 @@ import (
 	"github.com/chromedp/cdproto"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
+	"github.com/lauyoume/chromedp"
 )
 
 func main() {

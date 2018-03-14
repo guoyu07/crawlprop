@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 
@@ -12,14 +13,21 @@ func main() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	signal.Notify(signalChan, os.Kill)
-	pb := core.NewProber()
+	process := core.NewProcess()
+	tmpDir, err := ioutil.TempDir("/tmp/", "gcache")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	chromePath := "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+	process.SetExePath(chromePath)
+	process.SetUserDir(tmpDir)
 	go func() {
-		for sig := range signalChan {
-			fmt.Println(sig.String())
-			pb.Results()
+		for _ = range signalChan {
+			process.Exit()
 			os.Exit(-1)
 		}
 	}()
-	pb.Start()
-
+	process.Start()
+	<-(chan string)(nil)
 }
