@@ -52,6 +52,8 @@ func (c *Process) Start() {
 
 	c.flags = append(c.flags, fmt.Sprintf("--remote-debugging-port=%s", c.port))
 
+	//c.flags = append(c.flags, "--headless")
+
 	c.flags = append(c.flags, "--no-first-run")
 
 	c.flags = append(c.flags, "--no-default-browser-check")

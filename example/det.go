@@ -124,6 +124,7 @@ func main() {
 			x += int64(box["content"].([]interface{})[i].(float64))
 			y += int64(box["content"].([]interface{})[i+1].(float64))
 		}
+
 		x /= int64(c / 2)
 		y /= int64(c / 2)
 

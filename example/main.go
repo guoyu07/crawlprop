@@ -29,5 +29,9 @@ func main() {
 		}
 	}()
 	process.Start()
-	<-(chan string)(nil)
+
+	prober := core.NewProber()
+
+	prober.Run()
+	//<-(chan string)(nil)
 }
