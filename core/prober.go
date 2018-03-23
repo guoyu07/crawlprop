@@ -34,7 +34,7 @@ func NewProber() *Prober {
 		pageStatsChan:     make(chan *stats.PageStats),
 		stop:              make(chan bool),
 	}
-	p.scheduler.Push("http://testaspnet.vulnweb.com")
+	p.scheduler.Push("http://testaspnet.vulnweb.com/")
 	return p
 }
 
@@ -43,7 +43,7 @@ func (p *Prober) Run() {
 	for {
 		qs := p.scheduler.Poll()
 		if qs != "" {
-			log.Printf("%s", qs)
+			//log.Printf("%s", qs)
 			p.parallel([]string{qs})
 		}
 		time.Sleep(2 * time.Second)
@@ -87,21 +87,29 @@ func (p *Prober) processPage(link string) error {
 
 	defer remote.Close()
 
+	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
+		log.Printf("%s\t%d", params["response"].(map[string]interface{})["url"], int(params["response"].(map[string]interface{})["status"].(float64)))
+
+	})
+
 	done := make(chan bool)
 	remote.CallbackEvent("Page.frameStoppedLoading", func(params godet.Params) {
 		done <- true
 	})
-
-	tab, err := remote.NewTab(link)
+	remote.PageEvents(false)
+	tab, err := remote.NewTab("about:blank")
 	if err != nil {
 		log.Printf("cannot create tab: %s", err)
 		return err
 	}
 
+	//remote.ActivateTab(tab)
+	remote.NetworkEvents(true)
+	remote.Navigate(link)
 	defer func() {
 		remote.CloseTab(tab)
 	}()
-	//http://testaspnet.vulnweb.com/Comments.aspx?id=2 多个alert的问题
+
 	remote.CallbackEvent("Page.javascriptDialogOpening", func(params godet.Params) {
 		if params["type"] == "alert" {
 			remote.HandleJavaScriptDialog(true, "")
@@ -137,7 +145,7 @@ func (p *Prober) processPage(link string) error {
 			r2 := res["attributes"].([]interface{})[i+1].(string)
 			if r1 == "href" {
 				linkTotal = linkTotal + 1
-				log.Printf("%s %d . %s", link, linkTotal, r2)
+				//log.Printf("%s %d . %s", link, linkTotal, r2)
 				r3 := "http://testaspnet.vulnweb.com/"
 				if !strings.HasPrefix(r2, r3) && strings.HasPrefix(r2, "http") {
 					continue

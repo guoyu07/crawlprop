@@ -52,24 +52,19 @@ func FetchLink(link string) {
 		})
 	*/
 	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
-		link2 := params["response"].(map[string]interface{})["url"].(string)
-		id := params["requestId"].(string)
-		log.Printf("id=%s", id)
-		byteData, _ := remote.GetResponseBody(id)
-		//r := bytes.NewReader(byteData)
-		if link2 == link {
-			fmt.Println("responseReceived",
-				params["type"],
-				params["response"].(map[string]interface{})["url"],
-				string(byteData))
-		}
+		log.Printf("%s\t%d", params["response"].(map[string]interface{})["url"], int(params["response"].(map[string]interface{})["status"].(float64)))
+
 	})
+
 	remote.NetworkEvents(true)
-	_, _ = remote.Navigate(link)
+	//_, _ = remote.Navigate(link)
+	tab, err := remote.NewTab(link)
+	remote.ActivateTab(tab)
+	remote.NetworkEvents(true)
 
 	time.Sleep(3 * time.Second)
 
-	res, err := remote.QuerySelectorAll(documentNode(remote), "a")
+	res, err := remote.QuerySelectorAll(documentNode(remote), "button")
 	if err != nil {
 		log.Printf("collect click event err : %s", err)
 		return
@@ -119,6 +114,6 @@ func main() {
 		}
 	}()
 	process.Start()
-	FetchLink("http://demo.testfire.net/")
+	FetchLink("http://zero.webappsecurity.com/index.html")
 	<-(chan string)(nil)
 }

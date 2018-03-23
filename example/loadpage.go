@@ -1,65 +1,66 @@
 package main
 
-/*
-get HTMLhttps://github.com/chromedp/chromedp/issues/128
-html, err := dom.GetOuterHTML().WithNodeID(cdptypes.NodeID(0)).Do(ctxt, c)
-*/
 import (
-	"encoding/json"
-	"log"
-	"net/url"
-	"sync"
+	"fmt"
+	"time"
 
-	"github.com/wirepair/gcd"
-	"github.com/wirepair/gcd/gcdapi"
+	"github.com/pkg/errors"
+	"github.com/raff/godet"
 )
 
 func main() {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	debugger := gcd.NewChromeDebugger()
-	target, err := debugger.NewTab()
-	if err != nil {
-		log.Fatalf("error opening new tab: %s\n", err)
+	html, url, code, err := GetWithHeadlessChrome("http://demo.aisec.cn/demo/aisec/")
+	fmt.Println(url, code, html, err)
+}
+
+func GetWithHeadlessChrome(URL string) (html, redirectedUrl string, statusCode int, err error) {
+	var remote *godet.RemoteDebugger
+	done := make(chan bool)
+
+	for i := 0; i < 20; i++ {
+		if remote, err = godet.Connect("127.0.0.1:9222", false); err == nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 
-	//subscribe to page load
-	target.Subscribe("Page.loadEventFired", func(targ *gcd.ChromeTarget, v []byte) {
-		doc, err := target.DOM.GetDocument(-1, true)
-		if err == nil {
-			log.Printf("%s\n", doc.DocumentURL)
-		}
-		// page loaded, we can exit now
-		// if you wanted to inspect the full response data, you could do that here
+	if err != nil {
+		return
+	}
+
+	defer remote.Close()
+
+	remote.CallbackEvent("Page.frameStoppedLoading", func(params godet.Params) {
+		done <- true
 	})
 
-	// get the Page API and enable it
-	if _, err := target.Page.Enable(); err != nil {
-		log.Fatalf("error getting page: %s\n", err)
-	}
-
-	target.Subscribe("Network.responseReceived", func(target *gcd.ChromeTarget, event []byte) {
-		eventObj := gcdapi.NetworkResponseReceivedEvent{}
-		err := json.Unmarshal(event, &eventObj)
-		if err != nil {
-			log.Fatalf("err %s\n", err)
-			return
+	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
+		resp := params.Map("response")
+		Url := resp["url"].(string)
+		tmp := int(resp["status"].(float64))
+		if Url == URL {
+			statusCode = tmp
 		}
-		urlObj, err := url.Parse(eventObj.Params.Response.Url)
-		if err != nil {
-			log.Printf("%s : %s\n", eventObj.Params.Response.Url, err)
-		} else {
-			log.Printf("%s ", urlObj.Host)
-		}
+		fmt.Println("---> ", tmp, Url)
 	})
+	remote.AllEvents(true)
 
-	navigateParams := &gcdapi.PageNavigateParams{Url: "http://demo.aisec.cn/demo/aisec"}
-	ret, _, _, err := target.Page.NavigateWithParams(navigateParams) // navigate
-	if err != nil {
-		log.Fatalf("Error navigating: %s\n", err)
+	//tab, err := remote.NewTab("about:blank")
+	remote.Navigate(URL)
+	//defer remote.CloseTab(tab)
+
+	//remote.SetBlockedURLs("*.jpg", "*.png", "*.gif", "*.css", "*.woff2", "*.woff", "*analytics.js")
+
+	select {
+	case <-time.After(time.Second * 5):
+		return html, redirectedUrl, statusCode, errors.New("Page Not found")
+	case <-done:
 	}
 
-	log.Printf("ret: %#v\n", ret)
-	wg.Wait() // wait for page load
-	debugger.CloseTab(target)
+	myHtml, _ := remote.EvaluateWrap(` return document.querySelector("html").outerHTML; `)
+
+	html = myHtml.(string)
+	redirectedUrl = URL
+
+	return
 }
