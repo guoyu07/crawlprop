@@ -1,0 +1,7 @@
+[logging]
+level = "info"
+output = "stdout"
+
+[api]
+bind = "127.0.0.1:85"
+enabled = true

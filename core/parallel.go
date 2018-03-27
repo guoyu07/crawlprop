@@ -2,7 +2,6 @@ package core
 
 import (
 	"log"
-	"sync"
 	"time"
 
 	"github.com/gobs/simplejson"
@@ -19,22 +18,10 @@ func documentNode(remote *godet.RemoteDebugger) int {
 	return doc.GetPath("root", "nodeId").MustInt(-1)
 }
 
-func parallel(urls []string) {
-	var wg sync.WaitGroup
-	for p := range urls {
-		wg.Add(1)
-		go func(page int) {
-			processPage(urls[page])
-			wg.Done()
-		}(p)
-	}
-
-	wg.Wait()
-}
-
 func processPage(link string) error {
 	var err error
 	var remote *godet.RemoteDebugger
+
 	for i := 0; i < 10; i++ {
 		if i > 0 {
 			time.Sleep(500 * time.Millisecond)
@@ -55,48 +42,66 @@ func processPage(link string) error {
 
 	defer remote.Close()
 
+	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
+		log.Printf("%s\t%d", params["response"].(map[string]interface{})["url"], int(params["response"].(map[string]interface{})["status"].(float64)))
+
+	})
+
+	remote.CallbackEvent("Runtime.consoleAPICalled", func(params godet.Params) {
+		//log.Printf("console... %+v", params)
+	})
+
+	//remote.RuntimeEvents(true)
+
 	done := make(chan bool)
 	remote.CallbackEvent("Page.frameStoppedLoading", func(params godet.Params) {
 		done <- true
 	})
+	remote.CallbackEvent("Page.javascriptDialogOpening", func(params godet.Params) {
+		remote.HandleJavaScriptDialog(true, "")
+	})
 
-	tab, err := remote.NewTab(link)
+	tab, err := remote.NewTab("about:blank")
+	//_, err = remote.NewTab("about:blank")
 	if err != nil {
 		log.Printf("cannot create tab: %s", err)
 		return err
 	}
 
-	defer func() {
-		remote.CloseTab(tab)
-	}()
-
+	//remote.ActivateTab(tab)
+	remote.RuntimeEvents(true)
+	remote.NetworkEvents(true)
 	remote.PageEvents(true)
+	remote.SendRequest("Page.addScriptToEvaluateOnNewDocument", godet.Params{
+		"source": `
+		window.alert = function alert(msg) {  };
+    window.confirm = function confirm(msg) { 
+        return true;
+	};
+	var messageLinkArr = []; 
+window.addEventListener('message', function(event) {
+        if (event.data.type && event.data.type === 'NavigationBlocked' && event.data.url) {
+            messageLinkArr.push(event.data.url);
+        }
+ messageLinkArr = [...new Set(messageLinkArr)];
+    });
+		`,
+	})
+	remote.Navigate(link)
+	defer remote.CloseTab(tab)
 
-	res, err := remote.QuerySelectorAll(documentNode(remote), "a")
-	if err != nil {
-		log.Printf("query selector : %s", err)
-		return err
+	select {
+	case <-done:
 	}
-	linkTotal := 0
-	for _, r := range res["nodeIds"].([]interface{}) {
+	handleClick(remote)
 
-		id := int(r.(float64))
-		res, _ := remote.SendRequest("DOM.getAttributes", godet.Params{
-			"nodeId": id,
-			"name":   "href",
-		})
-		alen := len(res["attributes"].([]interface{}))
-		if alen < 2 {
-			continue
-		}
-		for i := 0; i < alen; i += 2 {
-			r1 := res["attributes"].([]interface{})[i].(string)
-			r2 := res["attributes"].([]interface{})[i+1].(string)
-			if r1 == "href" {
-				linkTotal = linkTotal + 1
-				log.Printf("%s %d . %s", link, linkTotal, r2)
-			}
-			//log.Printf("id=%d, key=%s,value=%s", id, res["attributes"].([]interface{})[i].(string), res["attributes"].([]interface{})[i+1].(string))
+	handleForm(remote)
+	res, err := handleLink(remote)
+	if err != nil {
+		log.Println("handleLink : %s", err)
+	} else {
+		for _, link := range res {
+			log.Printf("%s", link)
 		}
 	}
 
