@@ -15,7 +15,8 @@ type Form struct {
 
 type Forms map[int]Form
 
-func handleForm(remote *godet.RemoteDebugger) (interface{}, error) {
+func handleForm(remote *godet.RemoteDebugger) (Forms, error) {
+	var rr Forms
 	res, err := remote.EvaluateWrap(`var arr = {};i=0;
 		document.querySelectorAll('form').forEach(function(form) {
 			arr[i] = {};
@@ -25,8 +26,13 @@ func handleForm(remote *godet.RemoteDebugger) (interface{}, error) {
 		});
 		//console.log(JSON.stringify(arr));
 		 return JSON.stringify(arr); `)
-	log.Printf("form = %+v", res)
-	return res, err
+	if err = json.Unmarshal([]byte(res.(string)), &rr); err != nil {
+		return nil, err
+	}
+	if len(rr) > 0 {
+		log.Printf("[DEBUG] got page forms : %+v", rr)
+	}
+	return rr, err
 }
 
 func handleLink(remote *godet.RemoteDebugger) (Links, error) {
@@ -53,6 +59,9 @@ func handleClick(remote *godet.RemoteDebugger) {
 	res, err := remote.QuerySelectorAll(documentNode(remote), "*")
 	if err != nil {
 		log.Printf("collect click event err : %s", err)
+		return
+	}
+	if res["nodeIds"] == nil {
 		return
 	}
 	for _, r := range res["nodeIds"].([]interface{}) {

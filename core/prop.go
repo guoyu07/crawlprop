@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log"
 	"sync"
 
 	"github.com/millken/crawlprop/config"
@@ -22,12 +23,16 @@ func run() error {
 	var hitLink bool
 	var linkList []string
 	for {
-		qs := QS.Poll()
-		if qs != "" {
-			hitLink = false
-			linkList = append(linkList, qs)
-		} else {
-			hitLink = true
+		for i := 1; i <= 3; i++ {
+			qs := QS.Poll()
+			if qs != "" {
+				hitLink = false
+				log.Printf("[INFO] Crawler URL: %s", qs)
+				linkList = append(linkList, qs)
+			} else {
+				hitLink = true
+			}
+
 		}
 		if hitLink && len(linkList) > 0 || len(linkList) > 3 {
 			processParallel(linkList)

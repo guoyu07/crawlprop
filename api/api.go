@@ -29,11 +29,8 @@ func Start(cfg config.ApiConfig) {
 
 	log.Printf("[INFO] Starting up API")
 
-	app = gin.New()
-
-	r := app.Group("/")
-
-	attachServers(r)
+	app = gin.Default()
+	app.GET("/", serverInit)
 
 	var err error
 	err = app.Run(cfg.Bind)

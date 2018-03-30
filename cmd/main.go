@@ -14,6 +14,7 @@ import (
 	"github.com/millken/crawlprop/api"
 	"github.com/millken/crawlprop/config"
 	"github.com/millken/crawlprop/core"
+	"github.com/millken/crawlprop/stored"
 )
 
 const version = "1.0.0"
@@ -47,17 +48,17 @@ func main() {
 	if err = config.Decode(string(data), &cfg, "toml"); err != nil {
 		log.Fatal(err)
 	}
-	filter_writer := os.Stdout
+	filterWriter := os.Stdout
 	if cfg.Logging.Output != "" {
 
 		switch cfg.Logging.Output {
 		case "stdout":
-			filter_writer = os.Stdout
+			filterWriter = os.Stdout
 		case "stderr":
-			filter_writer = os.Stderr
+			filterWriter = os.Stderr
 
 		default:
-			filter_writer, err = os.Create(cfg.Logging.Output)
+			filterWriter, err = os.Create(cfg.Logging.Output)
 			if err != nil {
 				log.Printf("[ERROR] %s", err)
 			}
@@ -65,10 +66,11 @@ func main() {
 		}
 
 	}
+
 	filter := &logutils.LevelFilter{
-		Levels:   []logutils.LogLevel{"INFO", "DEBUG", "WARN", "ERROR"},
+		Levels:   []logutils.LogLevel{"INFO", "WARN", "ERROR"},
 		MinLevel: logutils.LogLevel(strings.ToUpper(cfg.Logging.Level)),
-		Writer:   filter_writer,
+		Writer:   filterWriter,
 	}
 
 	log.SetOutput(filter)
@@ -76,6 +78,9 @@ func main() {
 
 	go api.Start(cfg.Api)
 
+	if err = stored.Initialize(cfg.Redis); err != nil {
+		log.Fatalf("[ERROR] %s", err)
+	}
 	core.Initialize(cfg)
 	<-(chan string)(nil)
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gobs/simplejson"
+	"github.com/goware/urlx"
 	"github.com/raff/godet"
 )
 
@@ -42,9 +43,13 @@ func processPage(link string) error {
 
 	defer remote.Close()
 
-	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
-		log.Printf("%s\t%d", params["response"].(map[string]interface{})["url"], int(params["response"].(map[string]interface{})["status"].(float64)))
+	remote.CallbackEvent("Network.requestWillBeSent", func(params godet.Params) {
+		log.Printf("[DEBUG] %s  %s", params["type"], params["request"].(map[string]interface{})["url"])
+	})
 
+	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
+		//log.Printf("%s\t%d", params["response"].(map[string]interface{})["url"], int(params["response"].(map[string]interface{})["status"].(float64)))
+		//log.Printf("%+v", params)
 	})
 
 	remote.CallbackEvent("Runtime.consoleAPICalled", func(params godet.Params) {
@@ -69,7 +74,7 @@ func processPage(link string) error {
 	}
 
 	//remote.ActivateTab(tab)
-	remote.RuntimeEvents(true)
+	//remote.RuntimeEvents(true)
 	remote.NetworkEvents(true)
 	remote.PageEvents(true)
 	remote.SendRequest("Page.addScriptToEvaluateOnNewDocument", godet.Params{
@@ -87,7 +92,13 @@ window.addEventListener('message', function(event) {
     });
 		`,
 	})
+
+	//pwait := make(chan bool)
+
+	//remote.SetVirtualTimePolicy(godet.VirtualTimePolicyPauseIfNetworkFetchesPending,		int(15/time.Millisecond))
+
 	remote.Navigate(link)
+	//<-pwait
 	defer remote.CloseTab(tab)
 
 	select {
@@ -96,12 +107,24 @@ window.addEventListener('message', function(event) {
 	handleClick(remote)
 
 	handleForm(remote)
+
+	linkx, _ := urlx.Parse(link)
 	res, err := handleLink(remote)
 	if err != nil {
-		log.Println("handleLink : %s", err)
-	} else {
-		for _, link := range res {
-			log.Printf("%s", link)
+		log.Printf("handleLink : %s", err)
+		return err
+	}
+	for _, link2 := range res {
+		link2x, err := urlx.Parse(link2)
+		if err != nil {
+			log.Printf("[ERROR] parse url :%s", err)
+			continue
+		}
+		if link2x.Host == linkx.Host {
+			log.Printf("[DEBUG] push => %s", link2)
+			Scheduler().Push(link2)
+		} else {
+			log.Printf("[DEBUG] skip => %s", link2)
 		}
 	}
 
