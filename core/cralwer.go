@@ -3,6 +3,7 @@ package core
 import (
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/goware/urlx"
@@ -13,11 +14,11 @@ import (
 type Crawler struct {
 	name, target string
 	allowHost    []string
-	tabOpens     int
-	tabOpened    int
+	tabOpens     int32
+	tabOpened    int32
 	queue        *scheduler.QueueScheduler
 	stop         chan bool
-	remote       *godet.RemoteDebugger
+	pause        bool
 }
 
 func NewCrawler(name, target string) *Crawler {
@@ -25,13 +26,14 @@ func NewCrawler(name, target string) *Crawler {
 	queue.Push(target)
 	var c *Crawler
 	c = &Crawler{
-		name:      name,
-		target:    target,
-		tabOpens:  4,
-		tabOpened: 0,
-		queue:     queue,
-		stop:      make(chan bool),
+		name:     name,
+		target:   target,
+		tabOpens: 1,
+		queue:    queue,
+		stop:     make(chan bool),
+		pause:    false,
 	}
+	atomic.StoreInt32(&c.tabOpened, 0)
 
 	return c
 }
@@ -40,10 +42,14 @@ func (c *Crawler) AllowHost(host string) {
 	c.allowHost = strings.Split(host, ",")
 }
 
-func (c *Crawler) Concurrent(n int) {
+func (c *Crawler) Concurrent(n int32) {
 	c.tabOpens = n
 }
 
+func (c *Crawler) Pause() {
+	log.Printf("[INFO] Pause crawler %s", c.name)
+	c.pause = true
+}
 func (c *Crawler) Stop() {
 
 	log.Printf("[INFO] Stopping crawler %s", c.name)
@@ -54,14 +60,19 @@ func (c *Crawler) Stop() {
 func (c *Crawler) Start() {
 
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-c.stop:
 				return
 			case <-ticker.C:
-				for i := c.tabOpened; i <= c.tabOpens; i++ {
+				tabOpend := atomic.LoadInt32(&c.tabOpened)
+				if tabOpend < 0 {
+					tabOpend = 0
+					atomic.StoreInt32(&c.tabOpened, 0)
+				}
+				for i := tabOpend; i <= c.tabOpens; i++ {
 					q := c.queue.Poll()
 					if q != "" {
 						go c.process(q)
@@ -73,28 +84,6 @@ func (c *Crawler) Start() {
 	}()
 }
 
-func (c *Crawler) connectCDP() error {
-	var err error
-	for i := 0; i < 10; i++ {
-		if i > 0 {
-			time.Sleep(500 * time.Millisecond)
-		}
-
-		c.remote, err = godet.Connect("localhost:9223", false)
-		if err == nil {
-			break
-		}
-		log.Printf("connect to CDP: %s", err)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	defer c.remote.Close()
-
-	return nil
-}
 func (c *Crawler) process(link string) {
 	var remote *godet.RemoteDebugger
 	var err error
@@ -108,7 +97,7 @@ func (c *Crawler) process(link string) {
 		if err == nil {
 			break
 		}
-		log.Printf("connect to CDP: %s", err)
+		log.Printf("[DEBUG] fail to connect CDP: %s", err)
 	}
 
 	if err != nil {
@@ -130,7 +119,7 @@ func (c *Crawler) process(link string) {
 		log.Printf("cannot create tab: %s", err)
 		return
 	}
-	c.tabOpened++
+	atomic.AddInt32(&c.tabOpened, 1)
 	remote.NetworkEvents(true)
 	remote.PageEvents(true)
 	remote.SendRequest("Page.addScriptToEvaluateOnNewDocument", godet.Params{
@@ -153,7 +142,7 @@ window.addEventListener('message', function(event) {
 
 	defer func() {
 		remote.CloseTab(tab)
-		c.tabOpened--
+		atomic.AddInt32(&c.tabOpened, -1)
 	}()
 
 	handleClick(remote)
