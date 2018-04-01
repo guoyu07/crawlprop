@@ -38,7 +38,10 @@ func handleForm(remote *godet.RemoteDebugger) (Forms, error) {
 func handleLink(remote *godet.RemoteDebugger) (Links, error) {
 	var rr Links
 	res, err := remote.EvaluateWrap(`
-		var arr = messageLinkArr, l = document.links;
+		var arr, l = document.links;
+		if(typeof messageLinkArr === "undefined"){arr = [];}else{
+			arr = messageLinkArr;
+		}
 		for(var i=0; i<l.length; i++) {
 		  arr.push(l[i].href);
 		}
@@ -46,7 +49,9 @@ func handleLink(remote *godet.RemoteDebugger) (Links, error) {
 
 		return JSON.stringify(items);
 		`)
-
+	if err != nil {
+		return nil, err
+	}
 	//log.Printf("link = %+v", res)
 	if err = json.Unmarshal([]byte(res.(string)), &rr); err != nil {
 		return nil, err

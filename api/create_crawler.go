@@ -1,11 +1,8 @@
 package api
 
 import (
-	"log"
-
-	"github.com/millken/crawlprop/core"
-
 	"github.com/gin-gonic/gin"
+	"github.com/millken/crawlprop/stored"
 )
 
 func init() {
@@ -23,9 +20,8 @@ func NewCreateCrawler(v *ActionParam) (Action, error) {
 }
 
 func (c *CreateCrawler) Response() (data gin.H, err error) {
-	log.Printf("%+v", c.URL)
-	crawler := core.NewCrawler(c.URL.Get("name"), c.URL.Get("target"))
-	crawler.Start()
-	data = gin.H{"records": "23"}
+	uuid := UUID()
+	stored.Create(uuid, c.URL.Get("name"), c.URL.Get("target"))
+	data = gin.H{"task_id": uuid}
 	return
 }

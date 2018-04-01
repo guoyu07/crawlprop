@@ -3,6 +3,8 @@ package api
 import (
 	"log"
 
+	"github.com/mattn/go-colorable"
+
 	"github.com/gin-gonic/gin"
 	"github.com/millken/crawlprop/config"
 )
@@ -10,16 +12,7 @@ import (
 /* gin app */
 var app *gin.Engine
 
-/**
- * Initialize module
- */
-func init() {
-	gin.SetMode(gin.ReleaseMode)
-}
-
-/**
- * Starts REST API server
- */
+// Start REST API server
 func Start(cfg config.ApiConfig) {
 
 	if !cfg.Enabled {
@@ -28,7 +21,9 @@ func Start(cfg config.ApiConfig) {
 	}
 
 	log.Printf("[INFO] Starting up API")
-
+	gin.DefaultWriter = colorable.NewColorableStdout()
+	//gin.DefaultWriter = ioutil.Discard
+	gin.SetMode(gin.ReleaseMode)
 	app = gin.Default()
 	app.GET("/", serverInit)
 

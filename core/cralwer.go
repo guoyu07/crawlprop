@@ -3,7 +3,7 @@ package core
 import (
 	"log"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/goware/urlx"
@@ -14,11 +14,9 @@ import (
 type Crawler struct {
 	name, target string
 	allowHost    []string
-	tabOpens     int32
-	tabOpened    int32
+	tabOpens     int
 	queue        *scheduler.QueueScheduler
 	stop         chan bool
-	pause        bool
 }
 
 func NewCrawler(name, target string) *Crawler {
@@ -31,10 +29,7 @@ func NewCrawler(name, target string) *Crawler {
 		tabOpens: 1,
 		queue:    queue,
 		stop:     make(chan bool),
-		pause:    false,
 	}
-	atomic.StoreInt32(&c.tabOpened, 0)
-
 	return c
 }
 
@@ -42,14 +37,10 @@ func (c *Crawler) AllowHost(host string) {
 	c.allowHost = strings.Split(host, ",")
 }
 
-func (c *Crawler) Concurrent(n int32) {
+func (c *Crawler) Concurrent(n int) {
 	c.tabOpens = n
 }
 
-func (c *Crawler) Pause() {
-	log.Printf("[INFO] Pause crawler %s", c.name)
-	c.pause = true
-}
 func (c *Crawler) Stop() {
 
 	log.Printf("[INFO] Stopping crawler %s", c.name)
@@ -60,28 +51,39 @@ func (c *Crawler) Stop() {
 func (c *Crawler) Start() {
 
 	go func() {
-		ticker := time.NewTicker(3 * time.Second)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-c.stop:
 				return
 			case <-ticker.C:
-				tabOpend := atomic.LoadInt32(&c.tabOpened)
-				if tabOpend < 0 {
-					tabOpend = 0
-					atomic.StoreInt32(&c.tabOpened, 0)
-				}
-				for i := tabOpend; i <= c.tabOpens; i++ {
+				links := []string{}
+				for i := 0; i < c.tabOpens; i++ {
 					q := c.queue.Poll()
 					if q != "" {
-						go c.process(q)
+						links = append(links, q)
 					}
-
+				}
+				if len(links) > 0 {
+					c.parallel(links)
 				}
 			}
 		}
 	}()
+}
+
+func (c *Crawler) parallel(links []string) {
+	var wg sync.WaitGroup
+	for i := range links {
+		wg.Add(1)
+		go func(page int) {
+			c.process(links[page])
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
 }
 
 func (c *Crawler) process(link string) {
@@ -119,7 +121,6 @@ func (c *Crawler) process(link string) {
 		log.Printf("cannot create tab: %s", err)
 		return
 	}
-	atomic.AddInt32(&c.tabOpened, 1)
 	remote.NetworkEvents(true)
 	remote.PageEvents(true)
 	remote.SendRequest("Page.addScriptToEvaluateOnNewDocument", godet.Params{
@@ -142,7 +143,6 @@ window.addEventListener('message', function(event) {
 
 	defer func() {
 		remote.CloseTab(tab)
-		atomic.AddInt32(&c.tabOpened, -1)
 	}()
 
 	handleClick(remote)

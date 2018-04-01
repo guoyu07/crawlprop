@@ -1,15 +1,14 @@
 package api
 
 import (
+	"crypto/rand"
 	"fmt"
-	"net/http"
 
 	"github.com/millken/crawlprop/stored"
 
 	"github.com/go-redis/redis"
 
 	"github.com/gin-gonic/gin"
-	"github.com/millken/crawlprop/core"
 
 	"log"
 	"net/url"
@@ -71,20 +70,14 @@ func serverInit(c *gin.Context) {
 
 }
 
-func attachServers(app *gin.RouterGroup) {
-
-	app.GET("/", func(c *gin.Context) {
-		c.IndentedJSON(http.StatusOK, nil)
-	})
-
-	app.GET("/", func(c *gin.Context) {
-		name := c.DefaultQuery("name", "Guest")
-		core.Scheduler().Push(name)
-		c.JSON(200, gin.H{
-			"status":  true,
-			"message": "succefully to add to task",
-			"url":     name,
-		})
-	})
-
+func UUID() string {
+	b := make([]byte, 16)
+	n, err := rand.Read(b)
+	if n != len(b) {
+		err = fmt.Errorf("Not enough entropy available")
+	}
+	if err != nil {
+		panic(err)
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
