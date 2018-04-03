@@ -14,14 +14,18 @@ var crawlers = struct {
 	m: make(map[string]*core.Crawler),
 }
 
-func Create(id, name, target string) error {
+func Create(id, name, target string, option core.Option) error {
 	crawlers.Lock()
 	defer crawlers.Unlock()
 
-	crawler := core.NewCrawler(name, target)
+	crawler, err := core.NewCrawler(id, name, target, option)
+	if err != nil {
+		return err
+	}
+	crawler.SetDB(id, client)
 	crawler.Start()
 	crawlers.m[id] = crawler
-	return nil
+	return err
 }
 
 func Get(id string) *core.Crawler {

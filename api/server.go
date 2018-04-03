@@ -58,7 +58,7 @@ func serverInit(c *gin.Context) {
 	if err != nil {
 		data = gin.H{
 			"status": 501,
-			"error":  err,
+			"error":  fmt.Sprintf("%s", err),
 		}
 	} else {
 		data = gin.H{

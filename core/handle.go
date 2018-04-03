@@ -26,6 +26,9 @@ func handleForm(remote *godet.RemoteDebugger) (Forms, error) {
 		});
 		//console.log(JSON.stringify(arr));
 		 return JSON.stringify(arr); `)
+	if err != nil {
+		return nil, err
+	}
 	if err = json.Unmarshal([]byte(res.(string)), &rr); err != nil {
 		return nil, err
 	}
